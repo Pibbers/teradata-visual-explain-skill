@@ -1,0 +1,5 @@
+{                                                                                                                                                                                                                                                                                           
+   "name": "teradata-visual-explain",                                                     
+   "description": "A skill to help decode and visualise the Teradata EXPLAIN output",
+   "version": "1.0.0"
+}
