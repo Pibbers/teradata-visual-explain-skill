@@ -1,0 +1,81 @@
+/*
+ * Teradata Brand CSS — mandatory stylesheet for EXPLAIN flow diagrams.
+ * Include verbatim in every generated HTML file.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --td-orange: #FF5F02;
+    --td-navy: #00233C;
+    --td-white: #FFFFFF;
+    --color-critical: #C0392B;
+    --color-warning: #FF5F02;
+    --color-good: #27AE60;
+    --color-info: #4A90E2;
+    --color-bg: #F5F7FA;
+    --color-bg-card: #FFFFFF;
+    --color-text: #00233C;
+    --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+body { font-family: var(--font-family); color: var(--color-text); }
+
+/* Page header */
+.td-page-header {
+    background: var(--td-navy);
+    border-bottom: 3px solid var(--td-orange);
+    padding: 16px 30px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.td-page-header .page-title { color: var(--td-white); font-weight: 600; font-size: 18px; }
+h1, h2, h3 { color: var(--td-navy); font-weight: 600; }
+
+/* Flow nodes */
+.flow-node {
+    background: white;
+    border-radius: 10px;
+    padding: 15px 20px;
+    min-width: 280px;
+    border: 3px solid;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+.flow-node:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+.flow-node.good     { border-color: #27AE60; }
+.flow-node.warning  { border-color: #FF5F02; }
+.flow-node.critical { border-color: #C0392B; }
+.flow-node.info     { border-color: #4A90E2; }
+
+/* Confidence badges */
+.confidence-badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+.confidence-badge.high { background: #27AE60; color: white; }
+.confidence-badge.low  { background: #FF5F02; color: white; }
+.confidence-badge.none { background: #C0392B; color: white; }
+
+/* Tooltips */
+.tooltip-content {
+    display: none;
+    position: absolute;
+    background: #2c3e50;
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    max-width: 400px;
+    font-size: 12px;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 10px;
+    z-index: 1000;
+}
+.flow-node:hover .tooltip-content { display: block; }
+
+/* Flow container */
+.flow-container { display: flex; flex-direction: column; gap: 20px; min-width: 1200px; }
+.flow-row { display: flex; align-items: center; justify-content: center; gap: 20px; }
+.flow-row.parallel { justify-content: space-around; }
+.flow-diagram { background: #f8f9fa; padding: 30px; border-radius: 8px; overflow-x: auto; }
