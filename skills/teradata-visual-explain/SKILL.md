@@ -1,13 +1,17 @@
 ---
 name: teradata-explain-analyzer
-description: Analyze Teradata SQL EXPLAIN output to visualize query execution plans, identify performance bottlenecks, and provide actionable optimization recommendations. Use proactively when users ask about query performance, slow queries, EXPLAIN analysis, query plan interpretation, or SQL optimization on Teradata.
+description: Analyze Teradata SQL EXPLAIN output to visualize query execution plans, identify performance bottlenecks, and provide actionable optimization recommendations. Outputs an interactive HTML report (default) or a Markdown report with Mermaid flowchart (for agents and text-based workflows). Use proactively when users ask about query performance, slow queries, EXPLAIN analysis, query plan interpretation, or SQL optimization on Teradata.
 ---
 
 # Teradata EXPLAIN Analyzer
 
 ## Overview
 
-Transform raw Teradata `EXPLAIN` output into interactive visual query plans with prioritized, actionable optimization recommendations. Serve both beginners needing educational context and experts expecting deep optimizer reasoning.
+Transform raw Teradata `EXPLAIN` output into visual query plans with prioritized, actionable optimization recommendations. Serve both beginners needing educational context and experts expecting deep optimizer reasoning.
+
+**Output formats:**
+- **HTML** (default) — Interactive flow diagram with hover tooltips, highlight controls, and Teradata branding. Best for human users in a browser.
+- **Markdown** — Mermaid flowchart with structured tables. Best for AI agents, text-based workflows, or when the user requests `markdown`/`mermaid` output.
 
 ---
 
@@ -33,6 +37,11 @@ Execute this systematic 8-step workflow for every EXPLAIN analysis:
 - Validate it contains step patterns (look for "We do", "We lock", estimated times)
 - Proceed directly to parsing
 
+**Determine output format:**
+- If the user explicitly requests `markdown`, `md`, `mermaid`, or `text` → **Markdown mode**
+- If the user is an AI agent or tool consuming the output → **Markdown mode**
+- Otherwise (including `html`, `visual`, `interactive`, `browser`, or no preference) → **HTML mode** (default)
+
 ---
 
 ### Step 2: Parse EXPLAIN Output
@@ -54,23 +63,7 @@ Extract every component systematically:
 - Partition phrases: `single partition of` / `n partitions of` / `all partitions of` / `m1 column partitions of`
 - Conditional DML branches: `If no update in step X then INSERT`
 
-**Key phrases glossary (map these to optimizer intent):**
-
-| Phrase | Optimizer Intent |
-|--------|-----------------|
-| `single-AMP RETRIEVE by way of the unique primary index` | Best-case tactical access, no spool needed |
-| `by way of an all-rows scan` | Full table scan — examine predicates, stats, partitioning |
-| `redistributed by hash code` | Row movement to co-locate join keys — check skew risk |
-| `duplicated on all AMPs` | Broadcast small input — verify it's truly small |
-| `(group_amps)` | Spool built on subset of AMPs — potential skew signal |
-| `(all_amps)` | Spool built on every AMP — expected for large tables |
-| `SORT to order Spool n by row hash` | Preparing for merge/hash join — sorted by rowhash |
-| `estimated with no confidence` | Missing statistics — unreliable cardinality estimate |
-| `estimated with low confidence` | Partial/stale statistics — conservative planning |
-| `estimated with high confidence` | Good statistics — optimizer has reliable estimates |
-| `execute the following steps in parallel` | Independent sub-steps dispatched concurrently |
-| `RowHash match scan` | Join/read driven by rowhash ordering |
-| `eliminating duplicate rows` | DISTINCT or duplicate removal in spool |
+**Key phrases glossary:** See [explain-glossary.md](references/explain-glossary.md) for the full EXPLAIN phrase → optimizer intent mapping table.
 
 ---
 
@@ -141,11 +134,12 @@ ELSE                           → INFO (blue)
 
 ---
 
-### Step 5: Generate Interactive Flow Diagram (PRIMARY DELIVERABLE)
+### Step 5: Generate Visual Report (PRIMARY DELIVERABLE)
 
-**ALWAYS generate an HTML flow diagram as the primary output.** This is not optional.
+**ALWAYS generate a visual flow diagram as the primary output.** This is not optional. Use the format determined in Step 1.
 
-#### Layout: Vertical Flow (Top → Bottom)
+Both formats share the same vertical layout logic:
+
 ```
 Lock Acquisition
       ↓
@@ -158,72 +152,18 @@ Sequential Operations (joins, sorts, aggregations)
 Final Output
 ```
 
-#### Node Structure (each EXPLAIN step = one node)
-```html
-<div class="flow-node [critical|warning|good|info]" data-step="N">
-    <div class="node-header">
-        <div class="node-step">Step N</div>
-        <div class="node-type">[ALL-AMP]</div>
-        <div class="confidence-badge [high|low|none]">HIGH</div>
-    </div>
-    <div class="node-title">Human-readable description of operation</div>
-    <div class="node-metrics">
-        <span class="metric-label">Rows</span><span class="metric-value">1,250,000</span>
-        <span class="metric-label">Size</span><span class="metric-value">573 MB</span>
-        <span class="metric-label">Time</span><span class="metric-value">2.5s (18%)</span>
-        <span class="metric-label">Method</span><span class="metric-value">Hash join</span>
-    </div>
-    <div class="tooltip-content">
-        <strong>Purpose:</strong> ...<br>
-        <strong>Technical:</strong> Join condition: A.id = B.id<br>
-        <strong>Performance:</strong> Why fast or slow<br>
-        <strong>Issue:</strong> Specific problem if any<br>
-        <strong>Fix:</strong> Immediate optimization action
-    </div>
-</div>
-```
+**Operation type labels:** See [operation-labels.md](references/operation-labels.md) for the mapping from EXPLAIN text to standardized badge labels (e.g. `all-AMPs RETRIEVE` → `[ALL-AMP]`, `product join` → `[PROD-J]`).
 
-#### Operation Type Labels (standardized icons)
+---
 
-| EXPLAIN Text | Label | Notes |
-|---|---|---|
-| all-AMPs RETRIEVE | `[ALL-AMP]` | |
-| single-AMP RETRIEVE | `[1-AMP]` | Best access |
-| hash join | `[HASH-J]` | |
-| merge join | `[MERGE-J]` | |
-| product join | `[PROD-J]` | ⚠️ Always flag critical |
-| nested join | `[NEST-J]` | |
-| SORT | `[SORT]` | |
-| aggregate/SUM | `[AGG]` | |
-| redistribute | `[REDIST]` | |
-| duplicate on all AMPs | `[DUP-ALL]` | |
-| lock | `[LOCK]` | |
-| output to user | `[OUTPUT]` | |
+#### Step 5A: HTML Mode (default)
 
-#### Arrows Between Steps
-```html
-<div class="flow-arrow">
-    <div class="arrow-line"></div>
-    <div class="arrow-label">Spool 3: 573 MB, 46,005 rows</div>
-</div>
-```
+Read these reference files when generating the HTML flow diagram:
 
-#### Parallel Execution Pattern
-```html
-<div class="parallel-start">◆ PARALLEL EXECUTION START (Steps 3.1–3.3)</div>
-<div class="flow-row parallel">
-    <!-- Nodes side-by-side using flex-direction: row -->
-</div>
-<div class="parallel-end">◆ PARALLEL EXECUTION COMPLETE</div>
-```
+- **Node, arrow & parallel templates:** [html-node-templates.md](references/html-node-templates.md) — HTML patterns for each flow node, arrows between steps, and parallel execution blocks. Includes data-attribute conventions and severity → CSS class mapping.
+- **Interactive controls:** [interactive-controls.js](assets/interactive-controls.js) — JavaScript functions for highlight/reset buttons. Include verbatim in a `<script>` tag.
 
-#### Confidence Indicators
-- `●●●●●` High Confidence
-- `●●●○○` Low Confidence
-- `○○○○○` No Confidence ⚠️
-- `●●●●◆` Index Join Confidence
-
-#### Required Interactive Features
+**Required interactive features:**
 
 1. **Hover tooltips** — Explain each step: purpose, technical details, performance implications, fix suggestions
 2. **"Highlight Critical Path"** button — Illuminate top 5 slowest steps
@@ -231,121 +171,45 @@ Final Output
 4. **"Highlight No Confidence"** button — Flash all No Confidence steps
 5. **"Reset"** button — Return all nodes to normal state
 
-```javascript
-function toggleCriticalPath() {
-    const criticalSteps = findTopStepsByTime(5); // top 5 by time %
-    document.querySelectorAll('.flow-node').forEach(node => {
-        if (criticalSteps.includes(node.dataset.step)) {
-            node.style.boxShadow = '0 0 20px 5px rgba(231,76,60,0.6)';
-            node.style.transform = 'scale(1.05)';
-        } else {
-            node.style.opacity = '0.4';
-        }
-    });
-}
-```
+**Required sections in HTML file:**
 
-#### Required Sections in HTML File
-
-1. **Teradata-branded page header** (navy background, orange accent, base64 logo — see CSS section)
+1. **Teradata-branded page header** (navy background, orange accent, base64 logo)
 2. **Summary metrics bar** — 4–6 cards: total time, step count, critical issues, confidence distribution, result rows
 3. **Legend** — Color meanings, badge types, operation icons
 4. **Interactive control buttons**
 5. **Flow diagram container** — All steps as nodes with arrows
 6. **Key Insights panel** — Critical path breakdown, data growth table, top 3 optimization actions
 
-#### Teradata Brand CSS (mandatory — include verbatim)
+**Teradata Brand Assets** (mandatory — include verbatim):
 
-```css
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+- **CSS:** Read [teradata-brand.css](assets/teradata-brand.css) and include the full content inside a `<style>` tag. You may extend it with additional styles for layout (summary cards, insights panels, etc.) but never modify the base brand rules.
+- **Logo:** Read [teradata-logo.html](assets/teradata-logo.html) and include the `<img>` tag inside the `.td-page-header` div. Never recreate or modify the base64 logo.
 
-:root {
-    --td-orange: #FF5F02;
-    --td-navy: #00233C;
-    --td-white: #FFFFFF;
-    --color-critical: #C0392B;
-    --color-warning: #FF5F02;
-    --color-good: #27AE60;
-    --color-info: #4A90E2;
-    --color-bg: #F5F7FA;
-    --color-bg-card: #FFFFFF;
-    --color-text: #00233C;
-    --font-family: 'Inter', system-ui, -apple-system, sans-serif;
-}
-body { font-family: var(--font-family); color: var(--color-text); }
+**Delivery:** Save as `[query_name]_flow_diagram.html` in the current working directory and open in the browser.
 
-.td-page-header {
-    background: var(--td-navy);
-    border-bottom: 3px solid var(--td-orange);
-    padding: 16px 30px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-.td-page-header .page-title { color: var(--td-white); font-weight: 600; font-size: 18px; }
-h1, h2, h3 { color: var(--td-navy); font-weight: 600; }
+---
 
-/* Flow nodes */
-.flow-node {
-    background: white;
-    border-radius: 10px;
-    padding: 15px 20px;
-    min-width: 280px;
-    border: 3px solid;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transition: all 0.3s ease;
-    cursor: pointer;
-    position: relative;
-}
-.flow-node:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
-.flow-node.good     { border-color: #27AE60; }
-.flow-node.warning  { border-color: #FF5F02; }
-.flow-node.critical { border-color: #C0392B; }
-.flow-node.info     { border-color: #4A90E2; }
+#### Step 5B: Markdown Mode
 
-/* Confidence badges */
-.confidence-badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
-.confidence-badge.high { background: #27AE60; color: white; }
-.confidence-badge.low  { background: #FF5F02; color: white; }
-.confidence-badge.none { background: #C0392B; color: white; }
+Read the full template and Mermaid conventions from [markdown-report-template.md](references/markdown-report-template.md).
 
-/* Tooltips */
-.tooltip-content {
-    display: none;
-    position: absolute;
-    background: #2c3e50;
-    color: white;
-    padding: 15px;
-    border-radius: 8px;
-    max-width: 400px;
-    font-size: 12px;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-top: 10px;
-    z-index: 1000;
-}
-.flow-node:hover .tooltip-content { display: block; }
+Generate the report **inline in the conversation response** (no external file). The report contains:
 
-/* Flow container */
-.flow-container { display: flex; flex-direction: column; gap: 20px; min-width: 1200px; }
-.flow-row { display: flex; align-items: center; justify-content: center; gap: 20px; }
-.flow-row.parallel { justify-content: space-around; }
-.flow-diagram { background: #f8f9fa; padding: 30px; border-radius: 8px; overflow-x: auto; }
-```
+1. **Summary table** — Total time, step count, critical issues, confidence distribution, result rows
+2. **Mermaid flowchart** — `flowchart TD` with severity-styled nodes, labeled edges (spool names/sizes), and `subgraph` blocks for parallel execution
+3. **Step details table** — One row per step with operation, table/spool, rows, size, time (%), confidence, severity
+4. **Top bottlenecks** — Ranked list of costliest steps
+5. **Optimization playbook** — Same recommendations as HTML mode, formatted as markdown
+6. **Key insights** — Data flow summary, spool management, parallel execution notes
 
-**Teradata logo (base64 — use this exact value, never recreate the logo mark):**
-```html
-<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABVCAMAAADOrBLEAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAGbUExURf9fAgAAAP9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv9fAv///3jJeXQAAACHdFJOUwAA4/Lx9HV8gggMBOHDxL0090PNnJ6YKgGB7pTktAfU3SD8YJ3GGf4QSfOtNgYDHk50g39kIdnqrlFBPT48I4na+u+4Uqr79vXtQNKTFGegDyfRd4jeMDkd2JBL+M4ib+nwUwJK0CbimQXoLna8ax8KK1iGyutCwS0sOkRMTRXnjBwW5ciKNyCa7VMAAAABYktHRIhrZhZaAAAACXBIWXMAAC4jAAAuIwF4pT92AAAAB3RJTUUH6gIDDSMcsQ7WtwAAAeNJREFUWMPt1tlbElEYBvCXMEhGssVwynIBCxBEMXQKynBDMAoqSElt0bKgXFpt07LM+bcdRpiGc0jOuaini/Nezjfze76zAo5Ym2py1AYLT9CkErELQAAC+E+AY80OOhLYgRYnleOtJziAejl5SgACEMC/B063naHiaucA7JDrhAuw8EQAAhCAAAQggL8MnAWXgHMk0MEJnCeBC518QBcJdPfwAa0k4PZwjQG9JKBevMQF2Lwk4HX5OHqAv49qwR0I9v+ZQGhgMDx0ORJ06O9geESlo1wJX43Grhm57qt6wOiN+Fi5z/GJyWbtKfqn1LpJTCd/JzVTASD7bxqvJNO3oOW22jjVv3mA37xvvJmsBtxp4QBG79bO1j0ZCLmYAcg5opC/r7UwqzADcwWykoO2LA+YgfkFsrJYXoiHi2wA8IiqWKFP7WNGwE5VvHpBjjxhA8JUZfpgbFJEYQAsWEqQlUJlfZefPmMBVp6TlRcwtnhHqjEgkYdfiRqHDsVYptQIQJC4AdNF06lF8eWr1ZL7EECb7rWk+blzvfbYAxuv37wNvMu/71sYS5hi/VAdaqfNtGCbH0HfG5Cl7MCnz1++bpkyv23cB9Kgs7Idv33f0T7n+xnSu/zhCcSVn7u/9vTx7wNeLG/Yd2GbHAAAAABJRU5ErkJggg=="
-     alt="Teradata" height="32" style="filter: brightness(0) invert(1);" />
-```
+**Mermaid essentials (see template for full conventions):**
+- Node IDs: `S1`, `S2_1`, `S3`, etc.
+- Node labels: `[BADGE] Step N: description<br>rows | size | time<br>confidence`
+- Style classes: `critical`, `warning`, `good`, `info` with matching `classDef`
+- Parallel blocks: `subgraph` with `direction LR`
+- Final output: stadium-shaped node `(["📤 OUTPUT: N rows → user"])`
 
-#### File Naming & Delivery
-```
-1. Create: /home/claude/[query_name]_flow_diagram.html
-2. Copy:   /mnt/user-data/outputs/[query_name]_flow_diagram.html
-3. Present via present_files tool as PRIMARY deliverable
-```
+**Delivery:** Render the entire report inline as markdown in the conversation response. No file is created.
 
 ---
 
@@ -550,48 +414,34 @@ Options: 1) Paste EXPLAIN text directly  2) Verify SQL and permissions
 
 Run through this before every delivery:
 
+**Both formats:**
 - [ ] All EXPLAIN steps represented in flow diagram
 - [ ] Color coding consistent (critical=red, warning=orange, good=green, info=blue)
 - [ ] Confidence levels correctly classified per step
-- [ ] Parallel execution blocks shown side-by-side
-- [ ] Arrows include spool names and sizes
-- [ ] Interactive buttons tested (highlight critical path, product joins, reset)
+- [ ] Parallel execution blocks shown correctly (side-by-side in HTML, subgraph in Mermaid)
+- [ ] Edges/arrows include spool names and sizes
+- [ ] Summary metrics accurate (total time, step count, critical count)
+- [ ] Key insights reference actual step numbers from the plan
+- [ ] Each recommendation is specific with ready-to-run SQL
+
+**HTML only:**
+- [ ] Interactive buttons work (highlight critical path, product joins, reset)
 - [ ] Tooltips contain purpose + technical detail + fix suggestion
 - [ ] Legend explains all visual elements
-- [ ] Summary metrics accurate (total time, step count, critical count)
-- [ ] Key Insights panel references actual step numbers from the plan
-- [ ] HTML file saved to `/mnt/user-data/outputs/`
-- [ ] File presented via `present_files` as PRIMARY deliverable
-- [ ] Response text is brief (3–4 paragraphs max — the diagram IS the analysis)
-- [ ] Each recommendation is specific with ready-to-run SQL
+- [ ] File saved in working directory and opened in browser
+
+**Markdown only:**
+- [ ] Mermaid `classDef` entries present for all four severity levels
+- [ ] Step details table includes all steps with correct metrics
+- [ ] Mermaid graph renders correctly (valid node IDs, balanced quotes, proper edge syntax)
 
 ---
 
-## Response Text Format (After Presenting Diagram)
+## Response Text Format
 
-Keep text to minimum — the visual does the heavy lifting:
+**HTML mode:** Keep accompanying text brief (3–4 paragraphs max) — the diagram is the analysis. Summarize the top bottlenecks and quick-win SQL after presenting the file.
 
-```markdown
-## 🚨 [or ✅] [One-sentence critical finding or validation]
-
-[Flow diagram presented via present_files]
-
-## Top Bottlenecks
-1. Step X: [Issue] — Y.YYs (ZZ% of total)
-2. Step X: [Issue] — Y.YYs (ZZ% of total)
-3. Step X: [Issue] — Y.YYs (ZZ% of total)
-
-## Quick Win
-```sql
-COLLECT STATISTICS ON db.table COLUMN col_name;
-```
-**Expected impact:** [Quantified or qualitative improvement estimate]
-
-## Next Steps
-1. [Immediate — do today]
-2. [Short-term — this week]
-3. [Consider — ongoing]
-```
+**Markdown mode:** The report IS the response — render the full markdown report inline per [markdown-report-template.md](references/markdown-report-template.md). No separate summary is needed since the report itself contains the summary table, Mermaid graph, step details, and playbook.
 
 ---
 
